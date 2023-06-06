@@ -8,7 +8,7 @@ on:
       - main
 env:
   CHART_NAME: tgtubenotibot
-  VERSION: main
+  VERSION: v1
 jobs:
   job:
     runs-on: ubuntu-latest
