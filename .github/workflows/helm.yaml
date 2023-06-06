@@ -9,7 +9,7 @@ on:
 env:
   VERSION: v1
 jobs:
-  job:
+  build-push:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3

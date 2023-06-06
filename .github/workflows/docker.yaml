@@ -10,7 +10,7 @@ env:
   REGISTRY: ghcr.io
   VERSION: v1
 jobs:
-  build:
+  build-push:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
