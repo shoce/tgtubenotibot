@@ -7,7 +7,7 @@ on:
     branches:
       - main
 env:
-  CHART_NAME: tgtubenotibot
+  CHART_NAME: helm.tgtubenotibot
   VERSION: v1
 jobs:
   job:
