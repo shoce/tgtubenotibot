@@ -1,3 +1,5 @@
+# https://github.com/bsord/helm-push
+# https://docs.github.com/en/actions/learn-github-actions/contexts
 name: helm
 permissions:
   packages: write

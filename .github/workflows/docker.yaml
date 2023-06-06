@@ -1,3 +1,5 @@
+# https://github.com/docker/build-push-action
+# https://docs.github.com/en/actions/learn-github-actions/contexts
 name: docker
 permissions:
   contents: read

@@ -29,17 +29,16 @@ var (
 	KvAccountId   string
 	KvNamespaceId string
 
-	HttpClient = &http.Client{}
-
-	TgToken      string
-	TgChatId     string
-	TgBossChatId string
+	TgToken  string
+	TgChatId string
 
 	// https://console.cloud.google.com/apis/credentials
 	YtApiKey    string
 	YtChannelId string
 
 	YtPublishedAfter string
+
+	HttpClient = &http.Client{}
 )
 
 func log(msg interface{}, args ...interface{}) {
