@@ -13,8 +13,8 @@ jobs:
   job:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
       - name: version
-        uses: actions/checkout@v3
         run: |
           sed -i -e "s/__VERSION__/$VERSION/g" helm/Chart.yaml
       - name: push
