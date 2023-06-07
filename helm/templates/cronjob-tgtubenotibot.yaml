@@ -4,25 +4,23 @@ kind: CronJob
 metadata:
   namespace: {{ .Values.Namespace }}
   name: tgtubenotibot
-  labels:
-    app: tgtubenotibot
 spec:
+  concurrencyPolicy: Forbid
+  suspend: false
   schedule: "{{ .Values.CronSchedule }}"
-  selector:
-    matchLabels:
-      app: tgtubenotibot
+  successfulJobsHistoryLimit: 6
+  failedJobsHistoryLimit: 6
   jobTemplate:
     metadata:
       name: tgtubenotibot
-      labels:
-        app: tgtubenotibot
-      annotations:
-        checksum/configmap-tgtubenotibot: {{ include ( print $.Template.BasePath "/" "configmap-tgtubenotibot.yaml" ) . | sha256sum }}
     spec:
-      containers:
-      - name: tgtubenotibot
-        imagePullPolicy: Always
-        image: {{ .Values.ImageName }}:{{ .Values.ImageTag }}
-        envFrom:
-          - configMapRef:
-              name: tgtubenotibot
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: tgtubenotibot
+            imagePullPolicy: Always
+            image: {{ .Values.ImageName }}:{{ .Values.ImageTag }}
+            envFrom:
+              - configMapRef:
+                  name: tgtubenotibot

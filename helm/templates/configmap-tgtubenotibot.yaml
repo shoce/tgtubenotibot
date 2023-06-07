@@ -4,8 +4,6 @@ kind: ConfigMap
 metadata:
   namespace: {{ .Values.Namespace }}
   name: tgtubenotibot
-  labels:
-    app: tgtubenotibot
 data:
   YamlConfigPath: "{{ .Values.YamlConfigPath }}"
   KvToken: "{{ .Values.KvToken }}"
