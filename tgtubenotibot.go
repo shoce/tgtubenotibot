@@ -649,6 +649,7 @@ func main() {
 	}
 	if item == nil {
 		log("no %s events", YtEventType)
+		tglog("no %s events", YtEventType)
 		os.Exit(0)
 	}
 
