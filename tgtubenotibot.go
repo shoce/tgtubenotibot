@@ -53,6 +53,59 @@ func log(msg interface{}, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, fmt.Sprintf("%s %s", ts, msg)+NL, args...)
 }
 
+func tglog(msg interface{}, args ...interface{}) error {
+	tgmsg := fmt.Sprintf(fmt.Sprintf("%s", msg)+NL, args...)
+
+	type TgSendMessageRequest struct {
+		ChatId              string `json:"chat_id"`
+		Text                string `json:"text"`
+		ParseMode           string `json:"parse_mode,omitempty"`
+		DisableNotification bool   `json:"disable_notification"`
+	}
+
+	type TgSendMessageResponse struct {
+		OK          bool   `json:"ok"`
+		Description string `json:"description"`
+		Result      struct {
+			MessageId int64 `json:"message_id"`
+		} `json:"result"`
+	}
+
+	smreq := TgSendMessageRequest{
+		ChatId:              TgBossChatId,
+		Text:                tgmsg,
+		ParseMode:           "",
+		DisableNotification: true,
+	}
+	smreqjs, err := json.Marshal(smreq)
+	if err != nil {
+		return fmt.Errorf("tglog json marshal: %w", err)
+	}
+	smreqjsBuffer := bytes.NewBuffer(smreqjs)
+
+	var resp *http.Response
+	tgapiurl := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", TgToken)
+	resp, err = http.Post(
+		tgapiurl,
+		"application/json",
+		smreqjsBuffer,
+	)
+	if err != nil {
+		return fmt.Errorf("tglog apiurl:`%s` apidata:`%s`: %w", tgapiurl, smreqjs, err)
+	}
+
+	var smresp TgSendMessageResponse
+	err = json.NewDecoder(resp.Body).Decode(&smresp)
+	if err != nil {
+		return fmt.Errorf("tglog decode response: %w", err)
+	}
+	if !smresp.OK {
+		return fmt.Errorf("tglog apiurl:`%s` apidata:`%s` api response not ok: %+v", tgapiurl, smreqjs, smresp)
+	}
+
+	return nil
+}
+
 func GetVar(name string) (value string, err error) {
 	if DEBUG {
 		log("DEBUG GetVar: %s", name)
@@ -446,13 +499,12 @@ func tgSendPhoto(chatid, url, caption, parsemode string) (msg *TgMessage, err er
 	return msg, nil
 }
 
-func main() {
+func ytsearch() (*youtube.Video, error) {
 	var err error
 
 	ytsvc, err := youtube.NewService(context.TODO(), option.WithAPIKey(YtKey))
 	if err != nil {
-		log("%s", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("NewService: %w", err)
 	}
 
 	// https://developers.google.com/youtube/v3/docs/search/list
@@ -462,25 +514,25 @@ func main() {
 	s = s.PublishedAfter(YtPublishedAfter)
 	rs, err := s.Do()
 	if err != nil {
-		log("%s", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("search/list: %w", err)
 	}
 
-	//log("search.list:")
-
-	//log("response: %+v", r)
-	//log("items:%d", len(r.Items))
-	/*
+	if DEBUG {
+		log("search.list:")
+		log("response: %+v", rs)
+		log("items:%d", len(rs.Items))
 		for i, item := range rs.Items {
 			log("n:%03d id:%s title:`%s`", i+1, item.Id.VideoId, item.Snippet.Title)
 		}
-	*/
-	if len(rs.Items) == 0 {
-		log("no %s events", YtEventType)
-		return
 	}
 
-	//log("videos.list:")
+	if len(rs.Items) == 0 {
+		return nil, nil
+	}
+
+	if DEBUG {
+		log("videos.list:")
+	}
 
 	vid := rs.Items[0].Id.VideoId
 
@@ -490,32 +542,27 @@ func main() {
 	v = v.Id(vid)
 	rv, err := v.Do()
 	if err != nil {
-		log("%s", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("videos/list: %w", err)
 	}
-	//log("response: %+v", rv)
-	tzmoscow, err := time.LoadLocation("Europe/Moscow")
-	if err != nil {
-		log("%s", err)
-		os.Exit(1)
+	if DEBUG {
+		log("response: %+v", rv)
 	}
 	if len(rv.Items) == 0 {
-		log("video %s not found", vid)
-		return
+		return nil, fmt.Errorf("video %s not found", vid)
 	}
-	item := rv.Items[0]
 
-	patime, err := time.Parse(time.RFC3339, item.Snippet.PublishedAt)
-	if err != nil {
-		log("%s", err)
-		os.Exit(1)
-	}
-	patime = patime.Add(1 * time.Second)
+	var item *youtube.Video
+	item = rv.Items[0]
+
+	return item, nil
+}
+
+func tgpost(item *youtube.Video) error {
+	var err error
 
 	sstime, err := time.Parse(time.RFC3339, item.LiveStreamingDetails.ScheduledStartTime)
 	if err != nil {
-		log("%s", err)
-		os.Exit(1)
+		return fmt.Errorf("parse start time: %w", err)
 	}
 
 	thumbnailurl := ""
@@ -534,10 +581,18 @@ func main() {
 		}
 	}
 
-	log("published at: %s"+NL, item.Snippet.PublishedAt)
+	if DEBUG {
+		log("published at: %s"+NL, item.Snippet.PublishedAt)
+	}
 
-	log("thumbnail: %s"+NL, thumbnailurl)
+	if DEBUG {
+		log("thumbnail: %s"+NL, thumbnailurl)
+	}
 
+	tzmoscow, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		return fmt.Errorf("time.LoadLocation: %w", err)
+	}
 	caption := fmt.Sprintf(
 		"*«%s»*"+NL+NL+
 			"%s/"+
@@ -550,7 +605,10 @@ func main() {
 		sstime.In(tzmoscow).Format("15:04"),
 		item.Id,
 	)
-	log("%s"+NL, caption)
+
+	if DEBUG {
+		log("%s"+NL, caption)
+	}
 
 	caption = strings.NewReplacer(
 		"(", "\\(",
@@ -571,10 +629,53 @@ func main() {
 	).Replace(caption)
 	msg, err := tgSendPhoto(TgChatId, thumbnailurl, caption, "")
 	if err != nil {
-		log("%s", err)
-		os.Exit(1)
+		return fmt.Errorf("telegram send photo: %w", err)
 	}
+
 	log("posted tg message id:%s"+NL, msg.Id)
 
-	log("published after: %s"+NL, patime.Format(time.RFC3339))
+	return nil
+}
+
+func main() {
+	var err error
+
+	var item *youtube.Video
+	item, err = ytsearch()
+	if err != nil {
+		log("youtube search: %s", err)
+		tglog("youtube search: %s", err)
+		os.Exit(1)
+	}
+	if item == nil {
+		log("no %s events", YtEventType)
+		os.Exit(0)
+	}
+
+	err = tgpost(item)
+	if err != nil {
+		log("telegram post: %s", err)
+		tglog("telegram post: %s", err)
+		os.Exit(1)
+	}
+
+	patime, err := time.Parse(time.RFC3339, item.Snippet.PublishedAt)
+	if err != nil {
+		log("parse PublishedAt time: %s", err)
+		tglog("parse PublishedAt time: %s", err)
+		os.Exit(1)
+	}
+
+	patime = patime.Add(1 * time.Second)
+	if DEBUG {
+		log("published after: %s"+NL, patime.Format(time.RFC3339))
+	}
+
+	err = SetVar(YtPublishedAfter, patime.Format(time.RFC3339))
+	if err != nil {
+		log("SetVar YtPublishedAfter: %s", err)
+		tglog("SetVar YtPublishedAfter: %s", err)
+		os.Exit(1)
+	}
+
 }
