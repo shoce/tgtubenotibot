@@ -13,7 +13,7 @@ data:
   KvNamespaceId: "{{ .Values.KvNamespaceId }}"
   TgToken: "{{ .Values.TgToken }}"
   TgChatId: "{{ .Values.TgChatId }}"
-  YtApiKey: "{{ .Values.YtApiKey }}"
+  YtKey: "{{ .Values.YtKey }}"
   YtChannelId: "{{ .Values.YtChannelId }}"
   YtPublishedAfter: "{{ .Values.YtPublishedAfter }}"
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -23,17 +25,21 @@ const (
 )
 
 var (
-	YamlConfigPath = "tgtubenotibot.yaml"
+	DEBUG bool
+
+	YamlConfigPath string = "tgtubenotibot.yaml"
 
 	KvToken       string
 	KvAccountId   string
 	KvNamespaceId string
 
-	TgToken  string
-	TgChatId string
+	TgToken      string
+	TgChatId     string
+	TgBossChatId string
 
 	// https://console.cloud.google.com/apis/credentials
-	YtApiKey    string
+	YtKey       string
+	YtUsername  string
 	YtChannelId string
 
 	YtPublishedAfter string
@@ -47,7 +53,287 @@ func log(msg interface{}, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, fmt.Sprintf("%s %s", ts, msg)+NL, args...)
 }
 
+func GetVar(name string) (value string, err error) {
+	if DEBUG {
+		log("DEBUG GetVar: %s", name)
+	}
+
+	value = os.Getenv(name)
+	if value != "" {
+		return value, nil
+	}
+
+	if YamlConfigPath != "" {
+		value, err = YamlGet(name)
+		if err != nil {
+			log("ERROR GetVar YamlGet %s: %v", name, err)
+			return "", err
+		}
+		if value != "" {
+			return value, nil
+		}
+	}
+
+	if KvToken != "" && KvAccountId != "" && KvNamespaceId != "" {
+		if v, err := KvGet(name); err != nil {
+			log("ERROR GetVar KvGet %s: %v", name, err)
+			return "", err
+		} else {
+			value = v
+		}
+	}
+
+	return value, nil
+}
+
+func SetVar(name, value string) (err error) {
+	if DEBUG {
+		log("DEBUG SetVar: %s: %s", name, value)
+	}
+
+	if KvToken != "" && KvAccountId != "" && KvNamespaceId != "" {
+		err = KvSet(name, value)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if YamlConfigPath != "" {
+		err = YamlSet(name, value)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	return fmt.Errorf("not kv credentials nor yaml config path provided to save to")
+}
+
+func YamlGet(name string) (value string, err error) {
+	configf, err := os.Open(YamlConfigPath)
+	if err != nil {
+		if DEBUG {
+			log("WARNING os.Open config file %s: %v", YamlConfigPath, err)
+		}
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	defer configf.Close()
+
+	configm := make(map[interface{}]interface{})
+	if err = yaml.NewDecoder(configf).Decode(&configm); err != nil {
+		if DEBUG {
+			log("WARNING yaml.Decode %s: %v", YamlConfigPath, err)
+		}
+		return "", err
+	}
+
+	if v, ok := configm[name]; ok == true {
+		switch v.(type) {
+		case string:
+			value = v.(string)
+		case int:
+			value = fmt.Sprintf("%d", v.(int))
+		default:
+			return "", fmt.Errorf("yaml value of unsupported type, only string and int types are supported")
+		}
+	}
+
+	return value, nil
+}
+
+func YamlSet(name, value string) error {
+	configf, err := os.Open(YamlConfigPath)
+	if err == nil {
+		configm := make(map[interface{}]interface{})
+		err := yaml.NewDecoder(configf).Decode(&configm)
+		if err != nil {
+			log("WARNING yaml.Decode %s: %v", YamlConfigPath, err)
+		}
+		configf.Close()
+		configm[name] = value
+		configf, err := os.Create(YamlConfigPath)
+		if err == nil {
+			defer configf.Close()
+			confige := yaml.NewEncoder(configf)
+			err := confige.Encode(configm)
+			if err == nil {
+				confige.Close()
+				configf.Close()
+			} else {
+				log("WARNING yaml.Encoder.Encode: %v", err)
+				return err
+			}
+		} else {
+			log("WARNING os.Create config file %s: %v", YamlConfigPath, err)
+			return err
+		}
+	} else {
+		log("WARNING os.Open config file %s: %v", YamlConfigPath, err)
+		return err
+	}
+
+	return nil
+}
+
+func KvGet(name string) (value string, err error) {
+	req, err := http.NewRequest(
+		"GET",
+		fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/storage/kv/namespaces/%s/values/%s", KvAccountId, KvNamespaceId, name),
+		nil,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", KvToken))
+	resp, err := HttpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("kv api response status: %s", resp.Status)
+	}
+
+	if rbb, err := io.ReadAll(resp.Body); err != nil {
+		return "", err
+	} else {
+		value = string(rbb)
+	}
+
+	return value, nil
+}
+
+func KvSet(name, value string) error {
+	mpbb := new(bytes.Buffer)
+	mpw := multipart.NewWriter(mpbb)
+	if err := mpw.WriteField("metadata", "{}"); err != nil {
+		return err
+	}
+	if err := mpw.WriteField("value", value); err != nil {
+		return err
+	}
+	mpw.Close()
+
+	req, err := http.NewRequest(
+		"PUT",
+		fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/storage/kv/namespaces/%s/values/%s", KvAccountId, KvNamespaceId, name),
+		mpbb,
+	)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", mpw.FormDataContentType())
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", KvToken))
+	resp, err := HttpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("kv api response status: %s", resp.Status)
+	}
+
+	return nil
+}
+
 func init() {
+	var err error
+
+	if os.Getenv("YamlConfigPath") != "" {
+		YamlConfigPath = os.Getenv("YamlConfigPath")
+	}
+	if YamlConfigPath == "" {
+		log("WARNING YamlConfigPath empty")
+	}
+
+	KvToken, err = GetVar("KvToken")
+	if err != nil {
+		log("ERROR %s", err)
+		os.Exit(1)
+	}
+	if KvToken == "" {
+		log("WARNING KvToken empty")
+	}
+
+	KvAccountId, err = GetVar("KvAccountId")
+	if err != nil {
+		log("ERROR %s", err)
+		os.Exit(1)
+	}
+	if KvAccountId == "" {
+		log("WARNING KvAccountId empty")
+	}
+
+	KvNamespaceId, err = GetVar("KvNamespaceId")
+	if err != nil {
+		log("ERROR %s", err)
+		os.Exit(1)
+	}
+	if KvNamespaceId == "" {
+		log("WARNING KvNamespaceId empty")
+	}
+
+	TgToken, err = GetVar("TgToken")
+	if err != nil {
+		log("ERROR %s", err)
+		os.Exit(1)
+	}
+	if TgToken == "" {
+		log("ERROR TgToken empty")
+		os.Exit(1)
+	}
+
+	TgChatId, err = GetVar("TgChatId")
+	if err != nil {
+		log("ERROR %s", err)
+		os.Exit(1)
+	}
+	if TgChatId == "" {
+		log("ERROR TgChatId empty")
+		os.Exit(1)
+	}
+
+	TgBossChatId, err = GetVar("TgBossChatId")
+	if err != nil {
+		log("ERROR %s", err)
+		os.Exit(1)
+	}
+	if TgBossChatId == "" {
+		log("ERROR TgBossChatId empty")
+		os.Exit(1)
+	}
+
+	YtKey, err = GetVar("YtKey")
+	if err != nil {
+		log("ERROR %s", err)
+		os.Exit(1)
+	}
+	if YtKey == "" {
+		log("ERROR: YtKey empty")
+		os.Exit(1)
+	}
+
+	YtUsername, err = GetVar("YtUsername")
+	if err != nil {
+		log("ERROR %s", err)
+		os.Exit(1)
+	}
+
+	YtChannelId, err = GetVar("YtChannelId")
+	if err != nil {
+		log("ERROR %s", err)
+		os.Exit(1)
+	}
+
+	YtPublishedAfter, err = GetVar("YtPublishedAfter")
+	if err != nil {
+		log("ERROR %s", err)
+		os.Exit(1)
+	}
 }
 
 func monthnameru(m time.Month) string {
@@ -163,7 +449,7 @@ func tgSendPhoto(chatid, url, caption, parsemode string) (msg *TgMessage, err er
 func main() {
 	var err error
 
-	ytsvc, err := youtube.NewService(context.TODO(), option.WithAPIKey(YtApiKey))
+	ytsvc, err := youtube.NewService(context.TODO(), option.WithAPIKey(YtKey))
 	if err != nil {
 		log("%s", err)
 		os.Exit(1)
