@@ -3,26 +3,26 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   namespace: {{ .Values.Namespace }}
-  name: {{ .Values.Namespace }}-tgtubenotibot
+  name: tgtubenotibot
   labels:
-    app: {{ .Values.Namespace }}-tgtubenotibot
+    app: tgtubenotibot
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: {{ .Values.Namespace }}-tgtubenotibot
+      app: tgtubenotibot
   template:
     metadata:
-      name: {{ .Values.Namespace }}-tgtubenotibot
+      name: tgtubenotibot
       labels:
-        app: {{ .Values.Namespace }}-tgtubenotibot
+        app: tgtubenotibot
       annotations:
-        checksum/configmap-zzdevopsbot: {{ include ( print $.Template.BasePath "/" "configmap-tgtubenotibot.yaml" ) . | sha256sum }}
+        checksum/configmap-tgtubenotibot: {{ include ( print $.Template.BasePath "/" "configmap-tgtubenotibot.yaml" ) . | sha256sum }}
     spec:
       containers:
-      - name: {{ .Values.Namespace }}-tgtubenotibot
+      - name: tgtubenotibot
         imagePullPolicy: Always
         image: {{ .Values.ImageName }}:{{ .Values.ImageTag }}
         envFrom:
           - configMapRef:
-              name: {{ .Values.Namespace }}-tgtubenotibot
+              name: tgtubenotibot
