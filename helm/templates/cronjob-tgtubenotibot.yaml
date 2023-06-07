@@ -1,17 +1,17 @@
 ---
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: batch/v1
+kind: CronJob
 metadata:
   namespace: {{ .Values.Namespace }}
   name: tgtubenotibot
   labels:
     app: tgtubenotibot
 spec:
-  replicas: 1
+  schedule: {{ .Values.CronSchedule }}
   selector:
     matchLabels:
       app: tgtubenotibot
-  template:
+  jobTemplate:
     metadata:
       name: tgtubenotibot
       labels:
