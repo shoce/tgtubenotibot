@@ -14,6 +14,7 @@ spec:
     metadata:
       name: tgtubenotibot
     spec:
+      backoffLimit: 0
       template:
         spec:
           restartPolicy: Never
