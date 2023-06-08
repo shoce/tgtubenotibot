@@ -16,7 +16,7 @@ spec:
     spec:
       template:
         spec:
-          restartPolicy: OnFailure
+          restartPolicy: Never
           containers:
           - name: tgtubenotibot
             imagePullPolicy: Always
