@@ -677,7 +677,7 @@ func main() {
 		log("published after: %s"+NL, patime.Format(time.RFC3339))
 	}
 
-	err = SetVar(YtPublishedAfter, patime.Format(time.RFC3339))
+	err = SetVar("YtPublishedAfter", patime.Format(time.RFC3339))
 	if err != nil {
 		log("SetVar YtPublishedAfter: %s", err)
 		tglog("SetVar YtPublishedAfter: %s", err)
