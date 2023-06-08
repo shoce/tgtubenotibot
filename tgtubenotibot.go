@@ -44,6 +44,7 @@ var (
 
 	YtPublishedAfter string
 
+	TzMoscow   *time.Location
 	HttpClient = &http.Client{}
 )
 
@@ -295,6 +296,12 @@ func KvSet(name, value string) error {
 
 func init() {
 	var err error
+
+	TzMoscow, err = time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		log("ERROR %s", err)
+		os.Exit(1)
+	}
 
 	if os.Getenv("YamlConfigPath") != "" {
 		YamlConfigPath = os.Getenv("YamlConfigPath")
@@ -589,10 +596,6 @@ func tgpost(item *youtube.Video) error {
 		log("thumbnail: %s"+NL, thumbnailurl)
 	}
 
-	tzmoscow, err := time.LoadLocation("Europe/Moscow")
-	if err != nil {
-		return fmt.Errorf("time.LoadLocation: %w", err)
-	}
 	caption := fmt.Sprintf(
 		"*«%s»*"+NL+NL+
 			"%s/"+
@@ -600,9 +603,9 @@ func tgpost(item *youtube.Video) error {
 			"*%s*"+NL+"(московское время)"+NL+NL+
 			"https://youtu.be/%s"+NL,
 		item.Snippet.Title,
-		strings.ToTitle(monthnameru(sstime.In(tzmoscow).Month())),
-		sstime.In(tzmoscow).Day(),
-		sstime.In(tzmoscow).Format("15:04"),
+		strings.ToTitle(monthnameru(sstime.In(TzMoscow).Month())),
+		sstime.In(TzMoscow).Day(),
+		sstime.In(TzMoscow).Format("15:04"),
 		item.Id,
 	)
 

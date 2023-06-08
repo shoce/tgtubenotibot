@@ -10,7 +10,8 @@ RUN ls -l -a
 
 
 FROM alpine:3.18.0
-RUN apk add gcompat && ln -s -f -v ld-linux-x86-64.so.2 /lib/libresolv.so.2
+RUN apk add --no-cache tzdata
+RUN apk add --no-cache gcompat && ln -s -f -v ld-linux-x86-64.so.2 /lib/libresolv.so.2
 RUN mkdir -p /opt/tgtubenotibot/
 COPY --from=build /root/tgtubenotibot/tgtubenotibot /opt/tgtubenotibot/tgtubenotibot
 RUN ls -l -a /opt/tgtubenotibot/
