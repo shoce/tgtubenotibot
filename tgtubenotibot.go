@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/api/option"
-	"google.golang.org/api/youtube/v3"
-	"gopkg.in/yaml.v3"
+	youtubeoption "google.golang.org/api/option"
+	youtube "google.golang.org/api/youtube/v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
 const (
@@ -506,20 +506,23 @@ func tgSendPhoto(chatid, url, caption, parsemode string) (msg *TgMessage, err er
 	return msg, nil
 }
 
-func ytsearch() (*youtube.Video, error) {
+func youtubesearch() (*youtube.Video, error) {
 	var err error
 
-	ytsvc, err := youtube.NewService(context.TODO(), option.WithAPIKey(YtKey))
+	ytsvc, err := youtube.NewService(context.TODO(), youtubeoption.WithAPIKey(YtKey))
 	if err != nil {
 		return nil, fmt.Errorf("NewService: %w", err)
 	}
 
 	// https://developers.google.com/youtube/v3/docs/search/list
 
-	s := ytsvc.Search.List([]string{"id", "snippet"}).MaxResults(1).Order("date").Type("video")
-	s = s.ChannelId(YtChannelId).EventType(YtEventType)
-	s = s.PublishedAfter(YtPublishedAfter)
-	rs, err := s.Do()
+	// https://console.cloud.google.com/apis/api/youtube.googleapis.com/quotas
+	// one search/list call costs 100 quota
+
+	searchlistcall := ytsvc.Search.List([]string{"id", "snippet"}).MaxResults(1).Order("date").Type("video")
+	searchlistcall = searchlistcall.ChannelId(YtChannelId).EventType(YtEventType)
+	searchlistcall = searchlistcall.PublishedAfter(YtPublishedAfter)
+	rs, err := searchlistcall.Do()
 	if err != nil {
 		return nil, fmt.Errorf("search/list: %w", err)
 	}
@@ -644,7 +647,7 @@ func main() {
 	var err error
 
 	var item *youtube.Video
-	item, err = ytsearch()
+	item, err = youtubesearch()
 	if err != nil {
 		log("youtube search: %s", err)
 		tglog("youtube search: %s", err)
