@@ -1,3 +1,16 @@
+/*
+
+https://console.cloud.google.com/apis/credentials
+https://console.cloud.google.com/apis/api/youtube.googleapis.com/quotas
+
+
+rm -f go.mod go.sum
+go mod init src.iriy.de/tgtubenotibot
+go get -a -u -v
+
+
+*/
+
 package main
 
 import (
@@ -50,12 +63,17 @@ var (
 
 func log(msg interface{}, args ...interface{}) {
 	t := time.Now().Local()
-	ts := fmt.Sprintf("%03d/%02d%02d/%02d%02d", t.Year()%1000, t.Month(), t.Day(), t.Hour(), t.Minute())
-	fmt.Fprintf(os.Stderr, fmt.Sprintf("%s %s", ts, msg)+NL, args...)
+	ts := fmt.Sprintf(
+		"%03dy"+"%02dm"+"%02dd"+"%02dh"+"%02dm",
+		t.Year()%1000, t.Month(), t.Day(), t.Hour(), t.Minute(),
+	)
+	msgtext := fmt.Sprintf("%s %s", ts, msg) + NL
+	fmt.Fprintf(os.Stderr, msgtext, args...)
 }
 
 func tglog(msg interface{}, args ...interface{}) error {
-	tgmsg := fmt.Sprintf(fmt.Sprintf("%s", msg)+NL, args...)
+	log(msg, args)
+	msgtext := fmt.Sprintf(fmt.Sprintf("%s", msg), args...) + NL
 
 	type TgSendMessageRequest struct {
 		ChatId              string `json:"chat_id"`
@@ -74,7 +92,7 @@ func tglog(msg interface{}, args ...interface{}) error {
 
 	smreq := TgSendMessageRequest{
 		ChatId:              TgBossChatId,
-		Text:                tgmsg,
+		Text:                msgtext,
 		ParseMode:           "",
 		DisableNotification: true,
 	}
@@ -649,12 +667,10 @@ func main() {
 	var item *youtube.Video
 	item, err = youtubesearch()
 	if err != nil {
-		log("youtube search: %s", err)
 		tglog("youtube search: %s", err)
 		os.Exit(1)
 	}
 	if item == nil {
-		log("no %s events", YtEventType)
 		if DEBUG {
 			tglog("no %s events", YtEventType)
 		}
@@ -663,14 +679,12 @@ func main() {
 
 	err = tgpost(item)
 	if err != nil {
-		log("telegram post: %s", err)
 		tglog("telegram post: %s", err)
 		os.Exit(1)
 	}
 
 	patime, err := time.Parse(time.RFC3339, item.Snippet.PublishedAt)
 	if err != nil {
-		log("parse PublishedAt time: %s", err)
 		tglog("parse PublishedAt time: %s", err)
 		os.Exit(1)
 	}
@@ -682,7 +696,6 @@ func main() {
 
 	err = SetVar("YtPublishedAfter", patime.Format(time.RFC3339))
 	if err != nil {
-		log("SetVar YtPublishedAfter: %s", err)
 		tglog("SetVar YtPublishedAfter: %s", err)
 		os.Exit(1)
 	}
